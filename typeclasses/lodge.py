@@ -4,6 +4,7 @@ from evennia import create_object
 
 from typeclasses.exits import Exit
 from typeclasses.rooms import Room
+from typeclasses.objects import Object as BaseObject
 
 class LodgeDoor(Exit):
     pass
@@ -14,6 +15,7 @@ class LodgeRoom(Room):
         self.db.flo = None
         self.db.pos = None
         self.db.siz = None
+        self.db.instance = None
 
     def set_position(self, left, top, floor = 1):
         self.db.flo = floor
@@ -92,17 +94,28 @@ class LodgeRoom(Room):
         for ext in self.exits:
             if ext.destination == dst:
                 return
-        
-        create_object(exit_typeclass,
-                      key = dst.key,
-                      aliases = dst.aliases.all() + aliases,
-                      location = self,
-                      destination = dst)
-        create_object(exit_typeclass,
-                      key = self.key,
-                      aliases = self.aliases.all() + back_aliases,
-                      location = dst,
-                      destination = self)
+        if self.db.instance:
+            self.db.instance.create_object(exit_typeclass,
+                          key = dst.key,
+                          aliases = dst.aliases.all() + aliases,
+                          location = self,
+                          destination = dst)
+            self.db.instance.create_object(exit_typeclass,
+                          key = self.key,
+                          aliases = self.aliases.all() + back_aliases,
+                          location = dst,
+                          destination = self)
+        else:
+            create_object(exit_typeclass,
+                          key = dst.key,
+                          aliases = dst.aliases.all() + aliases,
+                          location = self,
+                          destination = dst)
+            create_object(exit_typeclass,
+                          key = self.key,
+                          aliases = self.aliases.all() + back_aliases,
+                          location = dst,
+                          destination = self)
 
 class util_inf_array(object):
     def __init__(self, empty_elem = None):
@@ -236,3 +249,42 @@ def draw_map(rooms, tars = [], syms = [], colors = []):
 
     return rstr
 
+class LodgeInstance(BaseObject):
+
+    def at_object_creation(self):
+        self.db.rooms = []
+        self.db.log = None
+        self.db.inst_tag = self.key
+
+    def get_tag(self):
+        if not self.db.inst_tag:
+            raise RuntimeError('instance tag invalid')
+        return self.db.inst_tag
+
+    def get_room_tag(self):
+        return self.get_tag() + '@room'
+
+    def get_obj_tag(self):
+        return self.get_tag() + '@obj'
+
+    def get_log_tag(self):
+        return self.get_tag() + '@log'
+
+    def create_object(self, *args, **kargs):
+        obj = create_object(*args, **kargs)
+        obj.tags.add(self.get_obj_tag(), category='instance')
+        return obj
+
+    def create_room(self, *args, **kargs):
+        room = create_object(LodgeRoom, *args, **kargs)
+        room.db.instance = self
+        room.tags.add(self.get_room_tag(), category='instance')
+        self.db.rooms.append(room)
+        return room
+
+    def add_room(self, room):
+        if not room in self.db.rooms:
+            room.db.instance = self
+            room.tags.remove(category='instance')
+            room.tags.add(self.get_room_tag(), category='instance')
+            self.db.rooms.append(room)
