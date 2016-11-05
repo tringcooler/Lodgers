@@ -137,7 +137,7 @@ class util_inf_array(object):
     def __getitem__(self, i):
         return self._ar[i]
 
-def draw_map(rooms, tars = [], syms = []):
+def draw_map(rooms, tars = [], syms = [], colors = []):
     drawn_room = []
     ar_map = util_inf_array(empty_elem = ' ')
 
@@ -149,36 +149,55 @@ def draw_map(rooms, tars = [], syms = []):
 
     def draw_sym(pos, sym, shift=(0, 0), match=' ', force=False):
         ar_pos = trans_pos(pos, shift)
-        if force or ar_map.get_elem(ar_pos) == match:
+        old_sym = ar_map.get_elem(ar_pos)
+        colored = False
+        if len(old_sym) > 2:
+            old_sym = old_sym[-3]
+        if len(sym) > 2 and sym[-3] == old_sym:
+            colored = True
+        if force or old_sym == match or colored:
             ar_map.set_elem(ar_pos, sym)
 
     def draw_room(room):
         left, top = room.db.pos
         right, bottom = room.calc_rightbottom()
 
-        for i in range(left, right):
-            for j in range(4):
-                draw_sym((i, top), '-', (j, 0))
-        draw_sym((left, top), '+', force=True)
-        for i in range(top, bottom):
-            for j in range(2):
-                draw_sym((right, i), '|', (0, j))
-        draw_sym((right, top), '+', force=True)
-        for i in range(right, left, -1):
-            for j in range(4):
-                draw_sym((i, bottom), '-', (-j, 0))
-        draw_sym((right, bottom), '+', force=True)
-        for i in range(bottom, top, -1):
-            for j in range(2):
-                draw_sym((left, i), '|', (0, -j))
-        draw_sym((left, bottom), '+', force=True)
-        
+        sym = None
+        color = None
         if room in tars:
             idx = tars.index(room)
             sym = syms[idx]
+            if not sym:
+                color = colors[idx]
             midx = calc_mid(left, room.db.siz[0])
             midy = calc_mid(top, room.db.siz[1])
-            draw_sym((midx, midy), sym, (2, 1))
+
+        def clsym(s):
+            if color:
+                return '{' + color + s + '{n'
+            else:
+                return s
+
+        for i in range(left, right):
+            for j in range(4):
+                draw_sym((i, top), clsym('-'), (j, 0))
+        draw_sym((left, top), clsym('+'), force=True)
+        for i in range(top, bottom):
+            for j in range(2):
+                draw_sym((right, i), clsym('|'), (0, j))
+        draw_sym((right, top), clsym('+'), force=True)
+        for i in range(right, left, -1):
+            for j in range(4):
+                draw_sym((i, bottom), clsym('-'), (-j, 0))
+        draw_sym((right, bottom), clsym('+'), force=True)
+        for i in range(bottom, top, -1):
+            for j in range(2):
+                draw_sym((left, i), clsym('|'), (0, -j))
+        draw_sym((left, bottom), clsym('+'), force=True)
+        
+        if sym:
+            color = colors[idx]
+            draw_sym((midx, midy), clsym(sym), (2, 1))
 
     def draw_door(room, dst):
         ret = room.check_adjoin(dst)
