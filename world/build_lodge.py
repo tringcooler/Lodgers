@@ -7,45 +7,45 @@ def build_the1st_lodge():
 
     lodge = create_object(LodgeInstance, key = 'lodge01')
     
-    hall = lodge.create_room(key = 'hall')
-    hall.set_position(3, 3)
-    hall.set_size(7, 5)
+    hall = lodge.create_room(key = 'hall',
+                             position = (3, 3),
+                             size = (7, 5))
     
-    passage_l = lodge.create_room(key = 'left passage')
-    passage_l.set_position(2, 3)
-    passage_l.set_size(1, 5)
+    passage_l = lodge.create_room(key = 'left passage',
+                                  position = (2, 3),
+                                  size = (1, 5))
 
-    passage_r = lodge.create_room(key = 'right passage')
-    passage_r.set_position(10, 0)
-    passage_r.set_size(1, 8)
+    passage_r = lodge.create_room(key = 'right passage',
+                                  position = (10, 0),
+                                  size = (1, 8))
 
-    passage_m = lodge.create_room(key = 'middle passage')
-    passage_m.set_position(3, 2)
-    passage_m.set_size(7, 1)
+    passage_m = lodge.create_room(key = 'middle passage',
+                                  position = (3, 2),
+                                  size = (7, 1))
 
-    room_1 = lodge.create_room(key = 'room 1', aliases = ['r1'])
-    room_1.set_position(0, 7)
-    room_1.set_size(2, 1)
+    room_1 = lodge.create_room(key = 'room 1', aliases = ['r1'],
+                               position = (0, 7),
+                               size = (2, 1))
 
-    room_2 = lodge.create_room(key = 'room 2', aliases = ['r2'])
-    room_2.set_position(0, 3)
-    room_2.set_size(2, 4)
+    room_2 = lodge.create_room(key = 'room 2', aliases = ['r2'],
+                               position = (0, 3),
+                               size = (2, 4))
 
-    room_3 = lodge.create_room(key = 'room 3', aliases = ['r3'])
-    room_3.set_position(0, 0)
-    room_3.set_size(3, 3)
+    room_3 = lodge.create_room(key = 'room 3', aliases = ['r3'],
+                               position = (0, 0),
+                               size = (3, 3))
 
-    room_4 = lodge.create_room(key = 'room 4', aliases = ['r4'])
-    room_4.set_position(3, 0)
-    room_4.set_size(4, 2)
+    room_4 = lodge.create_room(key = 'room 4', aliases = ['r4'],
+                               position = (3, 0),
+                               size = (4, 2))
 
-    room_5 = lodge.create_room(key = 'room 5', aliases = ['r5'])
-    room_5.set_position(7, 0)
-    room_5.set_size(3, 2)
+    room_5 = lodge.create_room(key = 'room 5', aliases = ['r5'],
+                               position = (7, 0),
+                               size = (3, 2))
 
-    room_6 = lodge.create_room(key = 'room 6', aliases = ['r6'])
-    room_6.set_position(11, 0)
-    room_6.set_size(2, 8)
+    room_6 = lodge.create_room(key = 'room 6', aliases = ['r6'],
+                               position = (11, 0),
+                               size = (2, 8))
 
     hall.link_with_exit(passage_l, aliases = ['left'])
     hall.link_with_exit(passage_r, aliases = ['right'])
