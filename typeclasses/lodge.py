@@ -7,7 +7,10 @@ from typeclasses.rooms import Room
 from typeclasses.objects import Object as BaseObject
 
 class LodgeDoor(Exit):
-    pass
+
+    def at_first_save(self):
+        super(LodgeDoor, self).at_first_save()
+        self.db.near = self.destination
 
 class LodgeRoom(Room):
     
@@ -276,8 +279,22 @@ class LodgeInstance(BaseObject):
         return obj
 
     def create_room(self, *args, **kargs):
+        roomdict = {}
+        if 'position' in kargs:
+            roomdict['pos'] = kargs['position']
+            del kargs['position']
+        if 'size' in kargs:
+            roomdict['siz'] = kargs['size']
+            del kargs['size']
+        if 'floor' in kargs:
+            roomdict['flo'] = kargs['floor']
+            del kargs['floor']
+        else:
+            roomdict['flo'] = 1
         room = create_object(LodgeRoom, *args, **kargs)
         room.db.instance = self
+        for k in roomdict:
+            setattr(room.db, k, roomdict[k])
         room.tags.add(self.get_room_tag(), category='instance')
         self.db.rooms.append(room)
         return room
@@ -288,3 +305,5 @@ class LodgeInstance(BaseObject):
             room.tags.remove(category='instance')
             room.tags.add(self.get_room_tag(), category='instance')
             self.db.rooms.append(room)
+
+    
