@@ -38,7 +38,9 @@ class Lodger(Character):
             attention_locked[target] = 0
         attention_locked[target] += val
         if attention_locked[target] <= 0:
+            val -= attention_locked[target]
             del attention_locked[target]
+        return val
 
     def _get_attention_locked_all(self):
         attention = 0
@@ -52,28 +54,31 @@ class Lodger(Character):
             return 0
         return attention_locked[target]
 
-    def _calc_attention_cost(self, val, target, time = None):
-        # |              pool              |
-        # |      used      |               |
-        # |       target == o_target :     |
-        # |  val  | remain |               |
-        # |        val          |          |
-        # |       target != o_target :     |
-        # |     remain     |   val    |    |
-        attention = self.db.property['attention_max']
-        attention -= self._get_attention_locked_all()
-        attention += self._get_attention_locked(target)
-        attention_used, o_target = self._get_attention_pool(time = time)
-        if target == o_target:
-            cost = max(val, attention_used)
-            remain = min(attention_used - val, 0)
-        else:
-            cost = val + attention_used
-            remain = attention_used
-        return attention, cost, remain
+    def _get_attention_pool_max(self):
+        return max(
+            self.db.property[
+                'attention_max'] - self._get_attention_locked_all()
+            , 0)
 
     def pay_attention(self, val, target, force = False, time = None):
-        attention, cost, _t = self._calc_attention_cost(val, target, time = time)
+        # |            attention           |
+        # |      used      |               |
+        # |       target == o_target :     |
+        # |  val  |        |               |
+        # |        val          |          |
+        # |       target != o_target :     |
+        # |                |   val    |    |
+        if val <= 0:
+            return True
+        attention = self._get_attention_pool_max()
+        if attention == 0 and not force:
+            return False
+        attention_locked = self._get_attention_locked(target)
+        attention_pool, o_target = self._get_attention_pool(time = time)
+        attention_used = attention_locked + attention_pool
+        if target == o_target:
+            val = max(val - attention_used, 0)
+        cost = val + attention_pool
         if attention < cost and not force:
             return False
         cost = min(cost, attention)
@@ -81,13 +86,32 @@ class Lodger(Character):
         return True
 
     def lock_attention(self, val, target, force = False, time = None):
-        attention, cost, remain = self._calc_attention_cost(val, target, time = time)
-        if attention < cost and not force:
+        if val <= 0:
+            return True
+        attention = self._get_attention_pool_max()
+        if attention == 0 and not force:
             return False
-        pass
+        attention_pool, o_target = self._get_attention_pool(time = time)
+        if target == o_target:
+            remain = max(attention_pool - val, 0)
+        else:
+            remain = attention_pool
+            attention -= attention_pool
+        if attention < val and not force:
+            return False
+        self._set_attention_pool(remain, target = None, time = time)
+        self._set_attention_locked(val, target)
+        return True
 
     def free_attention(self, val, target, force = False, time = None):
-        pass
+        if val <= 0:
+            return
+        val = - self._set_attention_locked(- val, target)
+        attention = self._get_attention_pool_max()
+        attention_pool, _t = self._get_attention_pool(time = time)
+        val += attention_pool
+        val = min(val, attention)
+        self._set_attention_pool(val, target = None, time = time)
         
 class LodgerAction(object):
 
