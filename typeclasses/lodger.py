@@ -79,6 +79,8 @@ class Lodger(Character):
         attention_used = attention_locked + attention_pool
         if target == o_target:
             val = max(val - attention_used, 0)
+        else:
+            val = max(val - attention_locked, 0)
         cost = val + attention_pool
         if attention < cost and not force:
             return False
@@ -96,7 +98,8 @@ class Lodger(Character):
         if target == o_target:
             remain = max(attention_pool - val, 0)
         else:
-            remain = attention_pool
+            remain = min(attention_pool,
+                         max(attention - val, 0))
             attention -= attention_pool
         if attention < val and not force:
             return False
@@ -104,7 +107,7 @@ class Lodger(Character):
         self._set_attention_locked(val, target)
         return True
 
-    def free_attention(self, val, target, force = False, time = None):
+    def free_attention(self, val, target, time = None):
         if val <= 0:
             return
         val = - self._set_attention_locked(- val, target)
@@ -112,7 +115,7 @@ class Lodger(Character):
         attention_pool, _t = self._get_attention_pool(time = time)
         val += attention_pool
         val = min(val, attention)
-        self._set_attention_pool(val, target = None, time = time)
+        self._set_attention_pool(val, target, time = time)
         
 class LodgerAction(object):
 
