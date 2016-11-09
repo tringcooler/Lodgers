@@ -29,7 +29,7 @@ class Lodger(Character):
         if not time:
             time = get_time()
         timedif = max(int(time - stamp), 0)
-        new_val = min(val - timedif * self.db.property['attention_regen'], 0)
+        new_val = max(val - timedif * self.db.property['attention_regen'], 0)
         return new_val, target
 
     def _set_attention_locked(self, val, target):
@@ -43,6 +43,7 @@ class Lodger(Character):
         return val
 
     def _get_attention_locked_all(self):
+        attention_locked = self.db.status['attention_locked']
         attention = 0
         for target in attention_locked:
             attention += attention_locked[target]
