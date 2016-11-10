@@ -88,6 +88,14 @@ class Lodger(Character):
         self._set_attention_pool(cost, target, time = time)
         return True
 
+    def check_attention(self, target, time = None):
+        attention = self._get_attention_pool_max()
+        attention += self._get_attention_locked(target)
+        attention_pool, o_target = self._get_attention_pool(time = time)
+        if target != o_target:
+            attention -= attention_pool
+        return attention
+
     def lock_attention(self, val, target, force = False, time = None):
         if val <= 0:
             return True
