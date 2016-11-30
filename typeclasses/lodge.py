@@ -120,6 +120,9 @@ class LodgeRoom(Room):
                           location = dst,
                           destination = self)
 
+    def on_trigger(self, info):
+        return info
+
 class util_inf_array(object):
     def __init__(self, empty_elem = None):
         self._ar = []
