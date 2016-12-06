@@ -12,9 +12,15 @@ class Lodger(Character):
         self.db.property = {
             'attention_max': 0,
             'attention_regen': 0,
+            'trigger_volume': 0,
             }
         self.db.ability = {
-            'auto_reaction': {},
+            'action': {
+                'look_and_listen': 'look',
+                'look': 'look',
+                'listen': 'listen',
+                },
+            'reaction': {},
             }
         self.db.status = {
             'attention_pool': (0, 0, None),
@@ -136,18 +142,47 @@ class Lodger(Character):
         val = min(val, attention)
         self._set_attention_pool(val, target, time = time)
 
-    def on_trigger(self, info):
-        pass
+    def on_trigger(self, action, caller, info):
+        seen = False
+        heard = False
+        if ('visible' in info) and info['visible']:
+            seen = True
+        if ('volume' in info) and (
+            info['volume'] >= self.db.property['trigger_volume']):
+            heard = True
+        a_info = {
+            'target': caller,
+            'action': action,
+            }
+        if 'trigger_history' in info:
+            a_info['trigger_history'] = info['trigger_history']
+        if 'action_info' in info:
+            a_info['action_info'] = info['action_info']
+        if seen and heard and (
+            'look_and_listen' in self.db.ability['action']):
+            act = G_ACT(self.db.ability['action']['look_and_listen'])
+            act.execute(self, a_info)
+        else:
+            if seen and 'look' in self.db.ability['action']:
+                act = G_ACT(self.db.ability['action']['look'])
+                act.execute(self, a_info)
+            if heard and 'listen' in self.db.ability['action']:
+                act = G_ACT(self.db.ability['action']['listen'])
+                act.execute(self, a_info)
+        if action in self.db.ability['reaction']:
+            act = G_ACT(self.db.ability['reaction'][action])
+            act.execute(self, a_info)
 
-    def feel(source, content):
+    def feel(self, source, content):
         self.msg('{0}:{1}'.format(source, content))
         
 class LodgerAction(object):
 
     desc = None
-    trigger_room_only = False
+    trigger_room_only = True
     trigger_volume = 0
     trigger_volume_reduce = 10
+    attention_payment = 0
 
     def __init__(self):
         pass
@@ -158,43 +193,79 @@ class LodgerAction(object):
         else:
             return self
 
-    def on_trigger(self, info):
-        info['volum'] = max(0,
-            self.trigger_volume - self.trigger_volume_reduce * info['distance'])
-        return info
-
     def on_reaction(self, action, caller, info):
         pass
 
-    def trigger(self, caller):
+    def trigger_prepare(self, caller, info):
+        info['volume'] = max(0,
+            self.trigger_volume - self.trigger_volume_reduce * info['distance'])
+        if info['distance'] == 0:
+            info['visible'] = True
+        else:
+            info['visible'] = False
+        return info
+
+    def trigger_summary(self, caller, info):
+        return (self.description(), caller)
+
+    def trigger(self, caller, info):
         s_room = caller.location
         lodge = s_room.db.instance
+        summary = self.trigger_summary(caller, info)
+        if 'trigger_history' in info:
+            if summary in info['trigger_history']:
+                return
+            trigger_history = list(info['trigger_history'])
+            trigger_history.append(summary)
+        else:
+            trigger_history = [summary]
         for room in lodge.db.rooms:
-            info = {
-                'caller': caller,
-                'action': self.description(),
+            t_info = {
+                'action_info': info,
+                'trigger_history': trigger_history,
                 }
+            action = self.description()
             if room == s_room:
-                info['distance'] = 0
+                t_info['distance'] = 0
             else:
                 if self.trigger_room_only:
                     continue
-                info['distance'] = room.calc_distance(s_room)
-            info = self.on_triggrt(info)
+                t_info['distance'] = room.calc_distance(s_room)
+            t_info = self.trigger_prepare(caller, t_info)
             if room != s_room:
-                info['source'] = s_room
-                info['destination'] = room
-                info = s_room.on_trigger(info)
-                info = room.on_trigger(info)
+                t_info['source'] = s_room
+                t_info['destination'] = room
+                t_info = s_room.on_trigger(action, caller, t_info)
+                t_info = room.on_trigger(action, caller, t_info)
             for obj in room.contents:
                 if hasattr(obj, 'on_trigger'):
-                    obj.on_trigger(info)
+                    obj.on_trigger(action, caller, t_info)
 
-    def reaction(self, action, caller, info):
-        return self.on_reaction(action, caller, info)
+    def attention(self, caller, info):
+        if 'attention_force' in info:
+            force = info['attention_force']
+        else:
+            force = False
+        if 'attention_time' in info:
+            time = info['attention_time']
+        else:
+            time = None
+        if 'target' in info:
+            return caller.pay_attention(
+                self.attention_payment, info['target'],
+                force = force, time = time)
+        return False
 
     def execute(self, caller, info):
         pass
+
+LIST_ACTION = {}
+def C_ACT(act):
+    if act.desc in LIST_ACTION:
+        raise RuntimeError('action already exist')
+    LIST_ACTION[act.desc] = act()
+def G_ACT(desc):
+    return LIST_ACTION[desc]
 
 TXT_ACTION_CN = {
     'look': {
@@ -208,7 +279,6 @@ TXT_ACTION = TXT_ACTION_CN
 class LookAction(LodgerAction):
     
     desc = 'look'
-    trigger_room_only = True
 
     def __init__(self):
         super(LodgerAction, self).__init__()
@@ -221,36 +291,16 @@ class LookAction(LodgerAction):
         if not 'target' in info:
             caller.feel('error', TXT_ACTION['look']['error']['nothing'])
             return
+        r_info = {}
         target = info['target']
-        pass
+        if 'action' in info:
+            action = info['action']
+            r_info['caller'] = caller
+        else:
+            if hasattr(target, 'on_reaction'):
+                pass
+            else:
+                content = caller.at_look(target)
         caller.feel('look', content)
 
-g_action_list_key = None
-def create_action_list(key):
-    if g_action_list_key:
-        raise RuntimeError('action list already exist')
-    al = create_object(LodgeActionList, key = key)
-    g_action_list_key = key
-    return al
-
-def get_action_list():
-    if not g_action_list_key:
-        raise RuntimeError('action list not exist')
-    return search_object(g_action_list_key)[0]
-
-def get_action(desc):
-    return get_action_list().get_action(desc)
-        
-class LodgeActionList(BaseObject):
-
-    def at_object_creation(self):
-        self.db.actions = {}
-
-    def create_action(self, action):
-        if action.desc in self.db.actions:
-            raise RuntimeError('action already exist')
-        self.db.actions[action.desc] = action()
-
-    def get_action(self, desc):
-        return self.db.actions[desc]
-
+C_ACT(LookAction)
