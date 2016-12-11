@@ -161,20 +161,26 @@ class Lodger(Character):
             a_info['trigger_history'] = info['trigger_history']
         if 'action_info' in info:
             a_info['action_info'] = info['action_info']
+            if 'attention_time' in info['action_info']:
+                a_info['attention_time'] = info['action_info']['attention_time']
+        def trigger_act(act):
+            if not hasattr(act, 'on_trigger') or (
+                act.on_trigger(self, caller, info)):
+                act.execute(self, a_info)
         if seen and heard and (
             'look_and_listen' in self.db.ability['action']):
             act = G_ACT(self.db.ability['action']['look_and_listen'])
-            act.execute(self, a_info)
+            trigger_act(act)
         else:
             if seen and 'look' in self.db.ability['action']:
                 act = G_ACT(self.db.ability['action']['look'])
-                act.execute(self, a_info)
+                trigger_act(act)
             if heard and 'listen' in self.db.ability['action']:
                 act = G_ACT(self.db.ability['action']['listen'])
-                act.execute(self, a_info)
+                trigger_act(act)
         if action in self.db.ability['reaction']:
             act = G_ACT(self.db.ability['reaction'][action])
-            act.execute(self, a_info)
+            trigger_act(act)
 
     def feel(self, source, content):
         self.msg('{0}:{1}'.format(source, content))
@@ -196,8 +202,18 @@ class LodgerAction(object):
         else:
             return self
 
-    def on_reaction(self, action, caller, info):
-        pass
+    def has_reaction(self, action, info):
+        reaction_name = 'on_reaction_' + action
+        if 'action' in info:
+            if hasattr(info['action'], reaction_name):
+                return getattr(info['action'], reaction_name)
+        elif 'target' in info:
+            if hasattr(info['target'], reaction_name):
+                return getattr(info['target'], reaction_name)
+        return None
+
+    #def on_trigger(self, trigger, caller, info):
+    #    return True
 
     def trigger_prepare(self, caller, info):
         info['volume'] = max(0,
@@ -244,7 +260,7 @@ class LodgerAction(object):
                 if hasattr(obj, 'on_trigger'):
                     obj.on_trigger(action, caller, t_info)
 
-    def attention(self, caller, info):
+    def attention(self, caller, info, payment = None, threshold = None):
         if 'attention_force' in info:
             force = info['attention_force']
         else:
@@ -253,9 +269,11 @@ class LodgerAction(object):
             time = info['attention_time']
         else:
             time = None
+        if payment == None:
+            payment = self.attention_payment
         if 'target' in info:
             return caller.pay_attention(
-                info['target'], self.attention_payment,
+                info['target'], payment, threshold
                 force = force, time = time)
         return False
 
@@ -272,38 +290,47 @@ def G_ACT(desc):
 
 TXT_ACTION_CN = {
     'look': {
+        'reaction': {
+            'look': '看见{0}正看向{1}',
+            },
         'error': {
             'nothing': '不知道应该看向哪里',
-            }
-        }
+            },
+        },
     }
 TXT_ACTION = TXT_ACTION_CN
 
 class LookAction(LodgerAction):
     
     desc = 'look'
+    attention_payment = 10
 
     def __init__(self):
         super(LodgerAction, self).__init__()
 
-    def on_reaction(self, action, caller, info):
-        if action == 'look':
-            pass
-
+    def on_reaction_look(self, caller, info):
+        att_payment = 10
+        att_threshold = 100
+        if not self.attention(caller, info, att_payment, att_threshold):
+            return
+        target = info['target']
+        patt = TXT_ACTION['look']['reaction']['look']
+        content = patt.format(caller.name, target.name)
+        caller.feel('look', content)
+        self.trigger(caller, info)
+    
     def execute(self, caller, info):
         if not 'target' in info:
             caller.feel('error', TXT_ACTION['look']['error']['nothing'])
             return
-        r_info = {}
         target = info['target']
-        if 'action' in info:
-            action = info['action']
-            r_info['caller'] = caller
-        else:
-            if hasattr(target, 'on_reaction'):
-                pass
-            else:
+        react = self.has_reaction(self.desc, info)
+        if not react:
+            if self.attention(caller, info):
                 content = caller.at_look(target)
-        caller.feel('look', content)
+                caller.feel('look', content)
+                self.trigger(caller, info)
+        else:
+            react(caller, info)
 
 C_ACT(LookAction)
