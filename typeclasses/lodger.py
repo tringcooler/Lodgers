@@ -113,6 +113,7 @@ class Lodger(Character):
         attention_pool, o_target = self._get_attention_pool(time = time)
         if target != o_target:
             attention -= attention_pool
+        self.dbgmsg('check: {0} has {1} att'.format(target.name, attention))
         return attention
 
     def lock_attention(self, target, val, force = False, time = None):
