@@ -184,6 +184,9 @@ class Lodger(Character):
 
     def feel(self, source, content):
         self.msg('{0}:{1}'.format(source, content))
+
+    def dbgmsg(self, content):
+        self.feel('debug', content)
         
 class LodgerAction(object):
 
@@ -273,7 +276,7 @@ class LodgerAction(object):
             payment = self.attention_payment
         if 'target' in info:
             return caller.pay_attention(
-                info['target'], payment, threshold
+                info['target'], payment, threshold,
                 force = force, time = time)
         return False
 
