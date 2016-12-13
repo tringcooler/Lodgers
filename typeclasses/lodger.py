@@ -2,9 +2,10 @@
 
 from time import time as get_time
 from evennia import create_object, search_object
+from evennia import CmdSet
 from typeclasses.characters import Character
 from typeclasses.objects import Object as BaseObject
-from commands.command import Command
+from commands.command import Command as BaseCommand
 
 class Lodger(Character):
 
@@ -18,7 +19,7 @@ class Lodger(Character):
             'action': {
                 'look_and_listen': 'look',
                 'look': 'look',
-                'listen': 'listen',
+                #'listen': 'listen',
                 },
             'reaction': {},
             }
@@ -33,6 +34,7 @@ class Lodger(Character):
                 'foot': None,
                 },
             }
+        self.cmdset.add(LodgerCmdSetGen(self.db.ability['action']))
 
     def _set_attention_pool(self, val, target = None, time = None):
         if not time:
@@ -89,6 +91,8 @@ class Lodger(Character):
         # |                |   val    |    |
         if threshold == None:
             threshold = payment
+        self.dbgmsg('pay_att: while has {2} att, pay {1} att for {0}'.format(
+            self.dbgname(target), payment, threshold))
         if threshold <= 0 and payment <= 0:
             return True
         attention_pool = self._get_attention_pool_max()
@@ -100,11 +104,17 @@ class Lodger(Character):
         else:
             attention_used = attention_locked
             attention_remain -= attention_pool_used
+        self.dbgmsg(
+            'pay_att: {1} att remain for {0}, {3} att for {2} in pool'.format(
+                self.dbgname(target), attention_remain,
+                self.dbgname(o_target), attention_pool_used))
         if attention_remain < threshold and not force:
             return False
         payment = max(payment - attention_used, 0)
         payment = min(payment + attention_pool_used, attention_pool)
         self._set_attention_pool(payment, target, time = time)
+        self.dbgmsg('pay_att: after pay, {1} att for {0} in pool'.format(
+            self.dbgname(target), payment))
         return True
 
     def check_attention(self, target, time = None):
@@ -113,10 +123,13 @@ class Lodger(Character):
         attention_pool, o_target = self._get_attention_pool(time = time)
         if target != o_target:
             attention -= attention_pool
-        self.dbgmsg('check: {0} has {1} att'.format(target.name, attention))
+        self.dbgmsg('chk_att: {1} att remain for {0}'.format(
+            self.dbgname(target), attention))
         return attention
 
     def lock_attention(self, target, val, force = False, time = None):
+        self.dbgmsg('lck_att: lock {1} att for {0}'.format(
+            self.dbgname(target), val))
         if val <= 0:
             return True
         attention = attention_pool_max = self._get_attention_pool_max()
@@ -134,9 +147,14 @@ class Lodger(Character):
         val = min(val, attention_pool_max)
         self._set_attention_pool(remain, target = None, time = time)
         self._set_attention_locked(val, target)
+        self.dbgmsg(
+            'lck_att: after lock, {1} att for {0} in pool, {3} att locked for {2}'.format(
+                self.dbgname(o_target), remain, target.name, val))
         return True
 
     def free_attention(self, target, val, time = None):
+        self.dbgmsg('fre_att: free {1} att for {0}'.format(
+            self.dbgname(target), val))
         if val <= 0:
             return
         val = - self._set_attention_locked(- val, target)
@@ -145,6 +163,11 @@ class Lodger(Character):
         val += attention_pool
         val = min(val, attention)
         self._set_attention_pool(val, target, time = time)
+        self.dbgmsg('fre_att: after free, {1} att for {0} in pool'.format(
+            self.dbgname(target), val))
+
+    def get_act(self, action, group = 'action'):
+        return G_ACT(self.db.ability[group][action])
 
     def on_trigger(self, action, caller, info):
         seen = False
@@ -170,28 +193,35 @@ class Lodger(Character):
                 act.execute(self, a_info)
         if seen and heard and (
             'look_and_listen' in self.db.ability['action']):
-            act = G_ACT(self.db.ability['action']['look_and_listen'])
+            act = self.get_act('look_and_listen')
             trigger_act(act)
         else:
             if seen and 'look' in self.db.ability['action']:
-                act = G_ACT(self.db.ability['action']['look'])
+                act = self.get_act('look')
                 trigger_act(act)
             if heard and 'listen' in self.db.ability['action']:
-                act = G_ACT(self.db.ability['action']['listen'])
+                act = self.get_act('listen')
                 trigger_act(act)
         if action in self.db.ability['reaction']:
-            act = G_ACT(self.db.ability['reaction'][action])
+            act = self.get_act(action, 'reaction')
             trigger_act(act)
 
-    def feel(self, source, content):
+    def feel(self, source, content, info = None):
         self.msg('{0}:{1}'.format(source, content))
 
     def dbgmsg(self, content):
         self.feel('debug', content)
+
+    def dbgname(self, obj):
+        if hasattr(obj, 'name'):
+            return obj.name
+        else:
+            return repr(obj)
         
 class LodgerAction(object):
 
     desc = None
+    desc_aliases = []
     trigger_room_only = True
     trigger_volume = 0
     trigger_volume_reduce = 10
@@ -281,8 +311,52 @@ class LodgerAction(object):
                 force = force, time = time)
         return False
 
+    def on_cmd_create(self):
+        return {
+            'key': self.desc,
+            'aliases': self.desc_aliases,
+            }
+
+    def on_parse(self, args_line):
+        args = args_line.split()
+        a_info = {}
+        if len(args) > 0:
+            targets = search_object(args[0])
+            if targets:
+                a_info['target'] = targets[0]
+        return a_info
+
     def execute(self, caller, info):
         pass
+
+class LodgerCmd(BaseCommand):
+
+    def parse(self):
+        self.act = self.obj.get_act(self.key)
+        self.act_info = self.act.on_parse(self.args)
+
+    def func(self):
+        self.caller.dbgmsg('{1} {0} {2}'.format(
+            self.key,
+            self.caller.dbgname(self.caller),
+            self.caller.dbgname(
+                self.act_info['target'] if 'target' in self.act_info else None)))
+        self.act.execute(self.caller, self.act_info)
+
+class LodgerCmdSet(CmdSet):
+
+    def at_cmdset_creation(self):
+        for key in self.cmd_list:
+            act = self.cmdsetobj.get_act(key)
+            add_kargs = act.on_cmd_create()
+            cmd = LodgerCmd(**add_kargs)
+            self.add(cmd)
+
+def LodgerCmdSetGen(action_dict, cmdset_key = 'lodger_base_cmdset'):
+    class lcs(LodgerCmdSet):
+        key = cmdset_key
+        cmd_list = action_dict.keys()
+    return lcs
 
 LIST_ACTION = {}
 def C_ACT(act):
@@ -324,6 +398,10 @@ class LookAction(LodgerAction):
         self.trigger(caller, info)
     
     def execute(self, caller, info):
+        caller.dbgmsg('look: {0} {1}'.format(
+            caller.dbgname(caller),
+            caller.dbgname(
+                info['target'] if 'target' in info else None)))
         if not 'target' in info:
             caller.feel('error', TXT_ACTION['look']['error']['nothing'])
             return
