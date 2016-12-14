@@ -34,7 +34,18 @@ class Lodger(Character):
                 'foot': None,
                 },
             }
-        self.cmdset.add(LodgerCmdSetGen(self.db.ability['action']))
+
+    def at_cmdset_get(self, **kwargs):
+        if "force_init" in kwargs or not self.cmdset.has_cmdset(
+            'lodger_base_cmdset'):
+            self.cmdset.add(
+                LodgerCmdSetGen(
+                    self.db.ability['action'].keys(),
+                    'lodger_base_cmdset'),
+                permanent=False)
+
+    def at_init(self):
+        self.cmdset.remove('lodger_base_cmdset')
 
     def _set_attention_pool(self, val, target = None, time = None):
         if not time:
@@ -221,7 +232,6 @@ class Lodger(Character):
 class LodgerAction(object):
 
     desc = None
-    desc_aliases = []
     trigger_room_only = True
     trigger_volume = 0
     trigger_volume_reduce = 10
@@ -314,7 +324,7 @@ class LodgerAction(object):
     def on_cmd_create(self):
         return {
             'key': self.desc,
-            'aliases': self.desc_aliases,
+            'aliases': TXT_CMD_ALIASES[self.desc],
             }
 
     def on_parse(self, args_line):
@@ -352,11 +362,18 @@ class LodgerCmdSet(CmdSet):
             cmd = LodgerCmd(**add_kargs)
             self.add(cmd)
 
-def LodgerCmdSetGen(action_dict, cmdset_key = 'lodger_base_cmdset'):
+def LodgerCmdSetGen(actions, cmdset_key):
     class lcs(LodgerCmdSet):
         key = cmdset_key
-        cmd_list = action_dict.keys()
+        cmd_list = actions
     return lcs
+
+TXT_CMD_ALIASES_CN = {
+    'look': [
+        '看', 'lk'
+        ],
+    }
+TXT_CMD_ALIASES = TXT_CMD_ALIASES_CN
 
 LIST_ACTION = {}
 def C_ACT(act):
