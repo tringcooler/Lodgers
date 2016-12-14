@@ -248,12 +248,14 @@ class LodgerAction(object):
 
     def has_reaction(self, action, info):
         reaction_name = 'on_reaction_' + action
-        if 'action' in info:
-            if hasattr(info['action'], reaction_name):
-                return getattr(info['action'], reaction_name)
-        elif 'target' in info:
-            if hasattr(info['target'], reaction_name):
-                return getattr(info['target'], reaction_name)
+        if 'target' in info:
+            if 'action' in info:
+                act = info['target'].get_act(info['action'])
+                if hasattr(act, reaction_name):
+                    return getattr(act, reaction_name)
+            else:
+                if hasattr(info['target'], reaction_name):
+                    return getattr(info['target'], reaction_name)
         return None
 
     #def on_trigger(self, trigger, caller, info):
@@ -369,9 +371,7 @@ def LodgerCmdSetGen(actions, cmdset_key):
     return lcs
 
 TXT_CMD_ALIASES_CN = {
-    'look': [
-        '看', 'lk'
-        ],
+    'look': ['看', 'lk'],
     }
 TXT_CMD_ALIASES = TXT_CMD_ALIASES_CN
 
@@ -409,18 +409,19 @@ class LookAction(LodgerAction):
         if not self.attention(caller, info, att_payment, att_threshold):
             return
         target = info['target']
-        patt = TXT_ACTION['look']['reaction']['look']
+        patt = TXT_ACTION[self.desc]['reaction']['look']
         content = patt.format(caller.name, target.name)
         caller.feel('look', content)
         self.trigger(caller, info)
     
     def execute(self, caller, info):
-        caller.dbgmsg('look: {0} {1}'.format(
+        caller.dbgmsg('look: {0} {1}: {2}'.format(
             caller.dbgname(caller),
             caller.dbgname(
-                info['target'] if 'target' in info else None)))
+                info['target'] if 'target' in info else None),
+            repr(info)))
         if not 'target' in info:
-            caller.feel('error', TXT_ACTION['look']['error']['nothing'])
+            caller.feel('error', TXT_ACTION[self.desc]['error']['nothing'])
             return
         target = info['target']
         react = self.has_reaction(self.desc, info)
